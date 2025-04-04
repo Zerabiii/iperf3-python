@@ -18,7 +18,7 @@ To get started quickly see the :ref:`examples` page.
 .. moduleauthor:: Mathijs Mortimer <mathijs@mortimer.nl>
 """
 
-from ctypes import util, cdll, c_char_p, c_int, c_char, c_void_p, c_uint64
+from ctypes import util, cdll, c_char_p, c_int, c_char, c_void_p, c_double, c_uint64
 import os
 import select
 import json
@@ -198,6 +198,15 @@ class IPerf3(object):
         self.lib.iperf_get_test_extra_data.argtypes = (c_void_p,)
         self.lib.iperf_set_test_extra_data.restype = None
         self.lib.iperf_set_test_extra_data.argtypes = (c_void_p, c_char_p)
+        self.lib.iperf_set_test_stats_interval.restype = None
+        self.lib.iperf_set_test_stats_interval.argtypes = (c_void_p, c_double)
+        self.lib.iperf_get_test_stats_interval.restype = c_double
+        self.lib.iperf_get_test_stats_interval.argtypes = (c_void_p,)
+        self.lib.iperf_set_test_reporter_interval.restype = None
+        self.lib.iperf_set_test_reporter_interval.argtypes = (c_void_p, c_double)
+        self.lib.iperf_get_test_reporter_interval.restype = c_double
+        self.lib.iperf_get_test_reporter_interval.argtypes = (c_void_p,)
+
 
         try:
             # Only available from iperf v3.1 and onwards
@@ -219,6 +228,9 @@ class IPerf3(object):
         self.role = role
         self.json_output = True
         self.verbose = verbose
+
+        # The default interval length
+        self.interval = 1.0
 
     def __del__(self):
         """Cleanup the test after the :class:`IPerf3` class is terminated"""
@@ -387,6 +399,22 @@ class IPerf3(object):
         VersionType = c_char * 30
         return VersionType.in_dll(self.lib, "version").value.decode('utf-8')
 
+    @property
+    def interval(self):
+        """The test interval in seconds.
+
+        This is the interval between periodic bandwidth reports.
+        """
+        self._interval = self.lib.iperf_get_test_reporter_interval(self._test)
+        return self._interval
+
+    @interval.setter
+    def interval(self, interval):
+        self.lib.iperf_set_test_reporter_interval(self._test, interval)
+        self.lib.iperf_set_test_stats_interval(self._test, interval)
+        self._interval = interval
+
+
     def _error_to_string(self, error_id):
         """Returns an error string from libiperf
 
@@ -396,6 +424,7 @@ class IPerf3(object):
         strerror = self.lib.iperf_strerror
         strerror.restype = c_char_p
         return strerror(error_id).decode('utf-8')
+
 
     def run(self):
         """Runs the iperf3 instance.
